@@ -85,7 +85,7 @@ class EngagementAgent:
             prompt = self._build_engagement_prompt(platform, engagement_type, context)
             
             response = self.client.messages.create(
-                model="claude-3-opus-20240229",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=200,
                 temperature=0.6,
                 system="""You are a helpful social media engagement assistant.

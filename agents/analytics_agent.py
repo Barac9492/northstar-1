@@ -102,7 +102,7 @@ class AnalyticsAgent:
             Focus on ROI improvements and growth opportunities."""
             
             response = self.client.messages.create(
-                model="claude-3-opus-20240229",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=300,
                 temperature=0.5,
                 system="You are a social media analytics expert. Provide data-driven insights.",
