@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
 import base64
+import anthropic
 
 st.set_page_config(
     page_title="NorthStar AI - Social Media Automation",
@@ -367,7 +368,13 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-API_BASE_URL = os.environ.get('API_BASE_URL', 'https://northstar-1.vercel.app/api/v1')
+# Initialize Anthropic client
+@st.cache_resource
+def get_anthropic_client():
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if api_key:
+        return anthropic.Anthropic(api_key=api_key)
+    return None
 
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -823,59 +830,94 @@ else:
             if st.button("🚀 Generate Content", type="primary", use_container_width=True):
                 with st.spinner("🤖 AI is crafting your perfect post..."):
                     try:
-                        response = requests.post(
-                            f"{API_BASE_URL}/content/generate",
-                            json={
-                                'platform': platform.lower(),
-                                'prompt': prompt,
-                                'tone': 'professional',
-                                'include_hashtags': include_hashtags,
-                                'include_emojis': True
-                            },
-                            timeout=30
+                        client = get_anthropic_client()
+                        if not client:
+                            st.error("⚠️ AI service not available. Please configure ANTHROPIC_API_KEY.")
+                            return
+                        
+                        # Construct AI prompt based on platform and requirements
+                        platform_prompts = {
+                            "twitter": f"Create an engaging Twitter post (max 280 characters) about: {prompt}",
+                            "instagram": f"Create an engaging Instagram caption with emojis about: {prompt}",
+                            "linkedin": f"Create a professional LinkedIn post about: {prompt}",
+                            "tiktok": f"Create a fun, viral TikTok caption about: {prompt}"
+                        }
+                        
+                        ai_prompt = platform_prompts.get(platform.lower(), platform_prompts["twitter"])
+                        ai_prompt += "\n\nTone: professional"
+                        
+                        if include_hashtags:
+                            ai_prompt += "\nInclude 3-5 relevant hashtags."
+                        
+                        ai_prompt += "\nInclude relevant emojis."
+                        ai_prompt += "\n\nAlso provide 2 alternative variants of the same content."
+                        
+                        # Call Anthropic API
+                        response = client.messages.create(
+                            model="claude-3-5-sonnet-20241022",
+                            max_tokens=500,
+                            messages=[{
+                                "role": "user", 
+                                "content": ai_prompt
+                            }]
                         )
                         
-                        if response.status_code == 200:
-                            result = response.json()
-                            # Update to match new API response format
-                            content = {
-                                'primary_content': result.get('text', 'Generated content'),
-                                'variants': result.get('variants', []),
-                                'hashtags': result.get('hashtags', [])
-                            }
-                            
-                            st.success("✅ Content generated successfully!")
-                            
-                            st.markdown("### 🎯 Primary Content")
-                            st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 2rem; border-radius: 12px; border-left: 4px solid #667eea; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-                                <div style="font-size: 1.1rem; line-height: 1.6;">{content.get('primary_content', 'Generated content')}</div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            if generate_variants and content.get('variants'):
-                                st.markdown("### 🎲 A/B Testing Variants")
-                                for i, variant in enumerate(content.get('variants', [])[:2]):
-                                    st.markdown(f"""
-                                    <div style="background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%); padding: 1.5rem; border-radius: 8px; margin: 0.8rem 0; border-left: 3px solid #4facfe;">
+                        # Extract content from response
+                        generated_text = response.content[0].text if response.content else "Generated content"
+                        
+                        # Simple parsing to extract main content and variants
+                        lines = generated_text.split('\n\n')
+                        main_content = lines[0] if lines else generated_text
+                        
+                        # Extract hashtags if present
+                        hashtags = []
+                        if '#' in main_content:
+                            import re
+                            hashtags = re.findall(r'#(\w+)', main_content)
+                        
+                        # Create variants (simplified)
+                        variants = []
+                        if len(lines) > 1:
+                            variants = [line.strip() for line in lines[1:3] if line.strip()]
+                        
+                        content = {
+                            'primary_content': main_content,
+                            'variants': variants,
+                            'hashtags': hashtags
+                        }
+                        
+                        st.success("✅ Content generated successfully!")
+                        
+                        st.markdown("### 🎯 Primary Content")
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 2rem; border-radius: 12px; border-left: 4px solid #667eea; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                            <div style="font-size: 1.1rem; line-height: 1.6;">{content.get('primary_content', 'Generated content')}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if generate_variants and content.get('variants'):
+                            st.markdown("### 🎲 A/B Testing Variants")
+                            for i, variant in enumerate(content.get('variants', [])[:2]):
+                                st.markdown(f"""
+                                <div style="background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%); padding: 1.5rem; border-radius: 8px; margin: 0.8rem 0; border-left: 3px solid #4facfe;">
                                         <strong style="color: #4facfe;">Variant {i+1}:</strong><br>
                                         <div style="margin-top: 0.8rem; font-size: 1rem; line-height: 1.5;">{variant}</div>
                                     </div>
-                                    """, unsafe_allow_html=True)
-                            
-                            # Performance prediction with enhanced design
-                            st.markdown("### 📊 AI Performance Prediction")
-                            col_pred1, col_pred2, col_pred3 = st.columns(3)
-                            with col_pred1:
-                                st.metric("Expected Engagement", "5.2% - 7.8%", "📈")
-                            with col_pred2:
-                                st.metric("Viral Potential", "High", "🔥")
-                            with col_pred3:
-                                st.metric("Best Time to Post", "2:15 PM", "⏰")
-                        else:
-                            st.error("Failed to generate content")
+                                """, unsafe_allow_html=True)
+                        
+                        # Performance prediction with enhanced design
+                        st.markdown("### 📊 AI Performance Prediction")
+                        col_pred1, col_pred2, col_pred3 = st.columns(3)
+                        with col_pred1:
+                            st.metric("Expected Engagement", "5.2% - 7.8%", "📈")
+                        with col_pred2:
+                            st.metric("Viral Potential", "High", "🔥")
+                        with col_pred3:
+                            st.metric("Best Time to Post", "2:15 PM", "⏰")
+                        
                     except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                        st.error(f"⚠️ Content generation failed: {str(e)}")
+                        st.info("💡 Tip: Make sure your prompt is descriptive and specific for better results.")
         
         with col2:
             st.markdown("### 💡 Pro Tips")

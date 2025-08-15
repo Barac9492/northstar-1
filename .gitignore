@@ -49,3 +49,4 @@ temp/
 # API Keys - NEVER commit these
 *.key
 secrets/
+.vercel

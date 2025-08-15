@@ -2,37 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/main.py",
-      "use": "@vercel/python"
-    },
-    {
       "src": "dashboard.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/dashboard",
-      "dest": "dashboard.py"
-    },
-    {
-      "src": "/",
+      "src": "/(.*)",
       "dest": "dashboard.py"
     }
-  ],
-  "env": {
-    "ANTHROPIC_API_KEY": "@anthropic_api_key"
-  },
-  "functions": {
-    "api/main.py": {
-      "maxDuration": 30
-    },
-    "dashboard.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
