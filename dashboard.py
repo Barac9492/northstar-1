@@ -367,7 +367,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-API_BASE_URL = os.environ.get('API_BASE_URL', 'http://localhost:5001')
+API_BASE_URL = os.environ.get('API_BASE_URL', 'https://northstar-1.vercel.app/api/v1')
 
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -824,16 +824,25 @@ else:
                 with st.spinner("🤖 AI is crafting your perfect post..."):
                     try:
                         response = requests.post(
-                            f"{API_BASE_URL}/api/agents/generate",
+                            f"{API_BASE_URL}/content/generate",
                             json={
                                 'platform': platform.lower(),
-                                'prompt': prompt
-                            }
+                                'prompt': prompt,
+                                'tone': 'professional',
+                                'include_hashtags': include_hashtags,
+                                'include_emojis': True
+                            },
+                            timeout=30
                         )
                         
                         if response.status_code == 200:
                             result = response.json()
-                            content = result.get('content', {})
+                            # Update to match new API response format
+                            content = {
+                                'primary_content': result.get('text', 'Generated content'),
+                                'variants': result.get('variants', []),
+                                'hashtags': result.get('hashtags', [])
+                            }
                             
                             st.success("✅ Content generated successfully!")
                             
