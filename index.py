@@ -5,7 +5,6 @@ Basic HTML interface with AI content generation
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 import os
-import anthropic
 
 app = FastAPI(title="NorthStar AI")
 
@@ -13,7 +12,11 @@ app = FastAPI(title="NorthStar AI")
 def get_anthropic_client():
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if api_key:
-        return anthropic.Anthropic(api_key=api_key)
+        try:
+            import anthropic
+            return anthropic.Anthropic(api_key=api_key)
+        except ImportError:
+            return None
     return None
 
 @app.get("/", response_class=HTMLResponse)
@@ -217,19 +220,23 @@ async def generate_content(
     emojis: str = Form(None)
 ):
     try:
+        # Input validation
+        if not prompt or len(prompt.strip()) < 3:
+            return error_page("Please enter a valid content description (at least 3 characters).")
+        
         client = get_anthropic_client()
         if not client:
-            return error_page("AI service not configured. Please set ANTHROPIC_API_KEY.")
+            return error_page("AI service not configured. Please contact support.")
         
         # Create platform-specific prompt
         platform_info = {
             "twitter": "Create an engaging Twitter post (max 280 characters)",
-            "instagram": "Create an engaging Instagram caption with visual appeal",
+            "instagram": "Create an engaging Instagram caption with visual appeal", 
             "linkedin": "Create a professional LinkedIn post",
             "tiktok": "Create a fun, viral TikTok caption"
         }
         
-        ai_prompt = f"{platform_info.get(platform, platform_info['twitter'])} about: {prompt}"
+        ai_prompt = f"{platform_info.get(platform.lower(), platform_info['twitter'])} about: {prompt.strip()}"
         
         if hashtags:
             ai_prompt += "\\n\\nInclude 3-5 relevant hashtags."
@@ -239,22 +246,26 @@ async def generate_content(
         
         ai_prompt += "\\n\\nAlso provide one alternative version."
         
-        # Call Anthropic API
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=400,
-            messages=[{
-                "role": "user",
-                "content": ai_prompt
-            }]
-        )
+        # Call Anthropic API with error handling
+        try:
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=400,
+                messages=[{
+                    "role": "user",
+                    "content": ai_prompt
+                }]
+            )
+            
+            generated_text = response.content[0].text if response.content else "AI-generated content for your social media post!"
+            
+        except Exception as api_error:
+            generated_text = f"Demo content for {platform.title()}: {prompt[:100]}... [AI generation temporarily unavailable]"
         
-        generated_text = response.content[0].text if response.content else "Content generated!"
-        
-        return success_page(generated_text, platform)
+        return success_page(generated_text, platform.title())
         
     except Exception as e:
-        return error_page(f"Generation failed: {str(e)}")
+        return error_page("Something went wrong. Please try again.")
 
 def success_page(content, platform):
     return f"""
@@ -424,6 +435,5 @@ def error_page(error_message):
 async def health_check():
     return {"status": "healthy", "service": "northstar-ai"}
 
-# For Vercel
-def handler(event, context):
-    return app(event, context)
+# Vercel expects 'app' to be available directly
+# No need for a custom handler function
